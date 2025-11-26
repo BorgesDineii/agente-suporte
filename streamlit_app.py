@@ -1,5 +1,5 @@
 import streamlit as st
-from openai import OpenAI
+from google import genai
 
 # Show title and description.
 st.title("💬 Chatbot")

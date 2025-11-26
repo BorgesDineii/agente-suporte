@@ -1,2 +1,5 @@
 streamlit
-openai
+google-genai
+bs4
+beautifulsoup4
+requests
