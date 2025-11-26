@@ -54,6 +54,7 @@ st.set_page_config(
     layout="wide"
 )
 
+
 st.title("Agente de Suporte (Rodrigo GPT🤓🐋)")
 st.markdown("Olá!! Sou seu Rodrigo GPT, seu assistente de suporte para consulta de dúvidas e procedimento.")
 st.markdown("---")
