@@ -12,6 +12,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter # Adicionado
 # --- 1. CONFIGURAÇÕES E VARIÁVEIS ---
 # ATENÇÃO: É recomendado usar st.secrets ou variáveis de ambiente para estas chaves.
 # Deixei como variáveis diretas para fins de restauração, mas remova antes de fazer commit!
+
 api_key = "xxxx"
 ATLASSIAN_USER = "valdinei.borges@e-deploy.com.br"
 ATLASSIAN_TOKEN = "xxxx-HeQXotkpCj3tN1LzABhvv0MaI2GkZqDoTII98=FA994E2B"
@@ -235,7 +236,7 @@ st.set_page_config(
 )
 
 st.title("Agente de Suporte (Rodrigo GPT🤓🐋)")
-st.markdown("Olá!! Sou seu Rodrigo GPT, seu assistente de suporte para consulta de dúvidas e procedimento.")
+st.markdown("Olá!! Sou Rodrigo GPT, seu assistente de suporte para consulta de dúvidas e procedimento.")
 st.markdown("---")
 
 # Removendo st.text_area isolado, pois a entrada de chat é mais eficiente
