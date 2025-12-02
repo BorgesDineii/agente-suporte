@@ -1,5 +1,7 @@
 streamlit
-google-genai
-bs4
-beautifulsoup4
 requests
+beautifulsoup4
+google-genai
+numpy
+faiss-cpu
+langchain-text-splitters

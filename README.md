@@ -1,19 +1,26 @@
-# 💬 Chatbot template
+# 🤖 Rodrigo GPT: Agente RAG de Suporte Técnico (Confluence)
 
-A simple Streamlit app that shows how to build a chatbot using OpenAI's GPT-3.5.
+Este projeto implementa um Chatbot de Geração Aumentada por Recuperação (RAG) utilizando o modelo **Gemini 2.5 Flash** para consultar procedimentos e informações diretamente de uma Base de Conhecimento do Confluence (Atlassian).
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://chatbot-template.streamlit.app/)
+O objetivo do agente é fornecer respostas claras e passo a passo, extraindo o conteúdo relevante do contexto e evitando alucinações.
 
-### How to run it on your own machine
+---
 
-1. Install the requirements
+## ⚙️ Configuração do Ambiente
 
-   ```
-   $ pip install -r requirements.txt
-   ```
+### Pré-requisitos
 
-2. Run the app
+* Python 3.8+
+* Acesso à API do Google Gemini.
+* Credenciais de acesso à API do Confluence (usuário e token de API).
 
-   ```
-   $ streamlit run streamlit_app.py
-   ```
+### 1. Instalação de Dependências
+
+Instale todas as bibliotecas necessárias usando o `requirements.txt`:
+
+```bash
+pip install -r requirements.txt
+```
+
+2. Configuração de Credenciais
+Você deve configurar as seguintes credenciais e chaves de API diretamente no topo do arquivo app.py (ou em variáveis de ambiente, que é a prática recomendada):

@@ -66,7 +66,7 @@ def busca_conteudo_confluence(space_key):
     auth_credentials = (USER_EMAIL.strip(), API_TOKEN.strip()) 
     headers = {"Accept":"application/json"}
     
-    url = f"{CONFLUENCE_URL}/wiki/rest/api/content?spaceKey={space_key}&expand=body.storage&limit=100"
+    url = f"{CONFLUENCE_URL}/wiki/rest/api/content?spaceKey={space_key}&expand=body.storage&limit=500"
     clean_knowledge_base = []
 
     try:
@@ -121,23 +121,51 @@ def create_vector_store(knowledge_base, client):
     
     # 2. Embedding (Geração de Vetores)
     texts = [doc["text"] for doc in documents]
-    
-    try:
-        response = client.models.embed_content(
-            model='text-embedding-004', 
-            contents=texts 
-        )
 
-        raw_embeddings_list = [item.values for item in response.embeddings]
+    BATCH_SIZE = 100
+    all_raw_embeddings = []
+
+    st.info(f"Gerando embeeedings para {len(texts)} chunks em lotes de {BATCH_SIZE}...")
+    st.sidebar.progress(0.0)
+
+    try:
+        total_chunks = len(texts)
+
+        for i in range(0, len(texts), BATCH_SIZE):
+            batch_texts = texts[i:i + BATCH_SIZE]
+
+            if not batch_texts:
+                continue
+
+
+            response = client.models.embed_content(
+                model='text-embedding-004', 
+                contents=batch_texts 
+            )
+
+            batch_raw_embeddings = [item.values for item in response.embeddings]
+            all_raw_embeddings.extend(batch_raw_embeddings)
+
+            current_progress = (i + len(batch_texts)) / total_chunks
+            st.sidebar.progress(current_progress)
+
+        embeddings = np.array(all_raw_embeddings, dtype=np.float32)
+
+        # raw_embeddings_list = [item.values for item in response.embeddings]
 
         # CORREÇÃO APLICADA AQUI: Notação de Ponto
-        embeddings = np.array(raw_embeddings_list, dtype=np.float32)
+        # embeddings = np.array(raw_embeddings_list, dtype=np.float32)
 
         if embeddings.ndim == 1:
             embeddings = embeddings.reshape(1, -1)
 
+        st.sidebar.progress(1.0)
+
     except Exception as e:
-        st.error(f"❌ Erro no Embedding do Gemini: {e}")
+        # Erro de debugging
+        error_message = f"400 INVALID_ARGUMENT. {e}" if "400" in str(e) else str(e)
+        print(f"ERRO FATAL NO EMBEDDING: {error_message}")
+        st.error(f"❌ Erro no Embedding do Gemini: Falha ao criar vetores. Detalhe: {error_message}")
         return None, None
 
     # 3. FAISS (Criação do Índice Vetorial)
