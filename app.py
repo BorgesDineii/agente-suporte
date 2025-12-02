@@ -12,7 +12,6 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter # Adicionado
 # --- 1. CONFIGURAÇÕES E VARIÁVEIS ---
 # ATENÇÃO: É recomendado usar st.secrets ou variáveis de ambiente para estas chaves.
 # Deixei como variáveis diretas para fins de restauração, mas remova antes de fazer commit!
-
 api_key = "xxxx"
 ATLASSIAN_USER = "valdinei.borges@e-deploy.com.br"
 ATLASSIAN_TOKEN = "xxxx-HeQXotkpCj3tN1LzABhvv0MaI2GkZqDoTII98=FA994E2B"
@@ -107,7 +106,7 @@ def create_vector_store(knowledge_base, client):
     # 1. Chunking (Divisão do texto)
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
-        chunk_overlap=200, 
+        chunk_overlap=300, 
         length_function=len 
     )
 
@@ -157,7 +156,7 @@ def gerar_resposta_rag(user_query, vector_index, documents, client):
     """
     # 1. Recuperação (Retrieval)
 
-    context = "\n---\n".join(retrieved_texts)
+    context = ""
 
     # 🛑 ADICIONE ESTE BLOCO DE DEBUG 🛑
     import streamlit as st
@@ -178,7 +177,7 @@ def gerar_resposta_rag(user_query, vector_index, documents, client):
     query_embedding = np.array(raw_query_vector, dtype=np.float32)
 
     # Busca os 3 chunks mais relevantes
-    D, I = vector_index.search(query_embedding.reshape(1, -1), k=5) 
+    D, I = vector_index.search(query_embedding.reshape(1, -1), k=10) 
 
     valid_indices = [i for i in I[0] if i != -1]
 
@@ -187,6 +186,7 @@ def gerar_resposta_rag(user_query, vector_index, documents, client):
     
     retrieved_texts = [documents[i]['text'] for i in valid_indices]
 
+    context = "\n---\n".join(retrieved_texts)
 
     # Constrói o contexto com o texto dos chunks recuperados
     # retrieved_texts = [documents[i]['text'] for i in I[0] if i != -1]
