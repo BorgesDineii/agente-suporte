@@ -66,7 +66,7 @@ def busca_conteudo_confluence(space_key):
     auth_credentials = (USER_EMAIL.strip(), API_TOKEN.strip()) 
     headers = {"Accept":"application/json"}
     
-    url = f"{CONFLUENCE_URL}/wiki/rest/api/content?spaceKey={space_key}&expand=body.storage&limit=25"
+    url = f"{CONFLUENCE_URL}/wiki/rest/api/content?spaceKey={space_key}&expand=body.storage&limit=100"
     clean_knowledge_base = []
 
     try:
@@ -106,7 +106,7 @@ def create_vector_store(knowledge_base, client):
     # 1. Chunking (Divisão do texto)
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
-        chunk_overlap=300, 
+        chunk_overlap=400, 
         length_function=len 
     )
 
@@ -179,6 +179,12 @@ def gerar_resposta_rag(user_query, vector_index, documents, client):
     # Busca os 3 chunks mais relevantes
     D, I = vector_index.search(query_embedding.reshape(1, -1), k=10) 
 
+    print("\n--- FAISS DEBUG ---")
+    print(f"Query: {user_query}")
+    print(f"Distâncias (D): {D}")
+    print(f"Índices (I): {I}")
+    print("-------------------\n")
+
     valid_indices = [i for i in I[0] if i != -1]
 
     if not valid_indices:
@@ -207,9 +213,10 @@ def gerar_resposta_rag(user_query, vector_index, documents, client):
     3. Mantenha a resposta objetiva, focando na solução.
 
     LIMITE DE CONHECIMENTO:
-    1. **Sua única exceção para não responder é a ausência total de informação.** Se o CONTEXTO estiver vazio, você deve responder: "Não encontrei informações relevantes para esta busca."
-    2. Caso receba contexto, **você deve gerar a resposta com base nele, mesmo que a informação seja parcial ou incompleta**.
-    3. Não responda a perguntas sobre saúde, medicamentos ou questões jurídicas.
+    1. Se o CONTEXTO não contiver o procedimento solicitado, **VOCÊ DEVE IGNORAR TOTALMENTE O CONTEÚDO IRRELEVANTE** (como Sefaz, RAID ou outros tópicos) e aplicar a resposta de *fallback*.
+    2. Resposta de *fallback* **OBRIGATÓRIA**: "Não encontrei o procedimento solicitado na Base de Conhecimento."
+    3. Se o CONTEXTO contiver o procedimento, utilize-o para gerar a resposta em passos.
+    4. Não responda a perguntas sobre saúde, medicamentos ou questões jurídicas.
 
     PERSONA:
     - Se a pergunta for "quem é voce?", responda: "Olá, sou Rodrigo GPT, um grande fã de churros e comida."
@@ -250,6 +257,14 @@ if 'vector_index' not in st.session_state:
         knowledge_base = busca_conteudo_confluence(SPACE_KEY)
         
         if knowledge_base:
+            st.sidebar.subheader("Páginas Ingeridas (DEBUG):")
+            for item in knowledge_base:
+                st.sidebar.markdown(f"- **{item['title']}** (Tamanho: {len(item['text'])} chars)")
+
+            if knowledge_base and len(knowledge_base[0]['text']) > 100:
+                st.sidebar.markdown("---")
+                st.sidebar.subheader("Primeiro Chunk Exemplo:")
+                st.sidebar.code(knowledge_base[0]['text'][:200] + "...")
             try:
                 vector_index, documents = create_vector_store(knowledge_base, client)
                 
