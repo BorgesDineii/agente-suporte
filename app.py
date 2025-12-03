@@ -20,7 +20,35 @@ CONFLUENCE_URL = "https://edeploy.atlassian.net"
 CONFLUENCE_URL = "https://edeploy.atlassian.net"
 USER_EMAIL = "valdinei.borges@e-deploy.com.br"
 API_TOKEN = "xxx-HeQXotkpCj3tN1LzABhvv0MaI2GkZqDoTII98=FA994E2B"
-SPACE_KEY = "SPOS2"
+SPACE_KEY = ["SPOS2", "SPOS1"]
+
+
+# --- 1. CONFIGURAÇÕES E VARIÁVEIS (Atualizado) ---
+# ... (seus imports e outras variáveis)
+
+# Remova o 'SPACE_KEY' singular e use o plural 'SPACE_KEYS'
+SPACE_KEYS = ["SPOS2", "SPOS1"] # CORRIGIDO: Nome da variável de iteração
+
+# Sua instrução de sistema DEVE ser global (remova a definição da função gerar_resposta_rag)
+SYSTEM_INSTRUCTION = """
+Você é o **Rodrigo GPT**, um Agente de Suporte Técnico da E-DEPLOY. Sua função é ser proativo, respeitoso e fornecer soluções e procedimentos claros.
+
+**REGRAS DE CONDUTA:**
+1. **Persona:** Se a pergunta for "quem é voce?", responda: "Olá, sou Rodrigo GPT, um grande fã de churros e comida."
+2. **Prioridade RAG/SOLUÇÃO:** Se houver 'CONTEXTO DE PROCEDIMENTO' e/ou análise de imagem/log que forneça uma solução, utilize-os para estruturar sua resposta em passos claros e numerados.
+3. **OBJETIVIDADE:** Mantenha a resposta concisa e profissional.
+
+**PRIORIDADE DE ANÁLISE (IMPORTANTE):**
+- Se uma imagem ou log estiver presente, a análise visual e técnica DEVE ser o primeiro passo.
+
+**LIMITE DE CONHECIMENTO E FALLBACK (ÚLTIMO RECURSO):**
+1. **Utilize APENAS** as informações contidas no 'CONTEXTO DE PROCEDIMENTO' E na análise de imagem.
+2. **Se o CONTEXTO estiver vazio E a imagem não for clara o suficiente para solução**, utilize o seguinte fallback **EXCLUSIVO**: "Não encontrei o procedimento solicitado na Base de Conhecimento."
+3. Não responda a perguntas sobre saúde, medicamentos ou questões jurídicas.
+
+PERSONA:
+- Se a pergunta for "quem é voce?", responda: "Olá, sou Rodrigo GPT, um grande fã de churros e comida."
+"""
 
 if not all([CONFLUENCE_URL, USER_EMAIL, API_TOKEN]):
     st.error("ERRO: Configure as variaveis de ambiente (ATLASSIAN_USER, ATLASSIAN_TOKEN e CONFLUENCE_URL).")
@@ -60,42 +88,71 @@ def limpando_html_content(html_content):
 
 def busca_conteudo_confluence(space_key):
     """
-    Busca todas as páginas de um Space Key e extrai o conteúdo limpo.
+    Busca todas as páginas de um Space Key, extrai o conteúdo limpo e implementa a paginação.
     """
-    # Usando o método mais robusto (auth=(email, token)) para evitar problemas de Base64
     auth_credentials = (USER_EMAIL.strip(), API_TOKEN.strip()) 
-    headers = {"Accept":"application/json"}
+    headers = {"Accept": "application/json"}
     
-    url = f"{CONFLUENCE_URL}/wiki/rest/api/content?spaceKey={space_key}&expand=body.storage&limit=500"
+    # Parâmetros de busca
+    MAX_LIMIT = 500 # Limite máximo que queremos baixar (o servidor pode impor um limite menor por requisição, como 25)
+    START_PAGINATION = 0
     clean_knowledge_base = []
+    
+    # st.info(f"Iniciando busca no espaço {space_key}...")
 
-    try:
-        # CORREÇÃO: Usando 'auth' no requests para autenticação direta
-        response = requests.get(url, headers=headers, auth=auth_credentials) 
-        response.raise_for_status()
+    while True:
+        # A API v1 geralmente usa 'start' e 'limit'
+        url = (
+            f"{CONFLUENCE_URL}/wiki/rest/api/content?spaceKey={space_key}"
+            f"&expand=body.storage"
+            f"&limit=100" # Usamos um limite seguro por requisição (100)
+            f"&start={START_PAGINATION}"
+        )
 
-        data = response.json()
-        st.success(f"✅ Conectado ao Confluence. Encontradas {len(data.get('results',[]))} páginas.")
-        
-        for page in data.get('results', []):
-            title = page.get('title')
-            html_content = page.get('body', {}).get('storage', {}).get('value', '')
+        try:
+            response = requests.get(url, headers=headers, auth=auth_credentials) 
+            response.raise_for_status()
 
-            if html_content:
-                # CORREÇÃO: Alterando a chamada da função para 'limpando_html_content'
-                clean_text = limpando_html_content(html_content) 
-                clean_knowledge_base.append({
-                    "title":title,
-                    "text":clean_text
-                })
-        return clean_knowledge_base
+            data = response.json()
+            
+            # 1. Processa os resultados desta página/lote
+            results = data.get('results', [])
+            
+            for page in results:
+                title = page.get('title')
+                html_content = page.get('body', {}).get('storage', {}).get('value', '')
 
-    except requests.exceptions.HTTPError as e:
-        st.error(f"❌ Erro HTTP ao conectar: {e}. Verifique seu Token.")
-        return None
-    except Exception as e:
-        st.error(f"❌ Erro desconhecido: {e}")
-        return None
+                if html_content:
+                    # Chamar limpando_html_content
+                    clean_text = limpando_html_content(html_content) 
+                    clean_knowledge_base.append({
+                        "title": title,
+                        "text": clean_text
+                    })
+
+            # 2. Verifica a Paginação
+            size_of_results = len(results)
+            total_size = len(clean_knowledge_base)
+            
+            # st.info(f"Espaço {space_key}: Páginas encontradas neste lote: {size_of_results}. Total: {total_size}")
+
+            # Se a quantidade de resultados for menor que o limite, ou se já atingimos o total desejado, paramos.
+            # Também usamos 'start' + 'size' == 'total' (propriedade que a API geralmente retorna)
+            if size_of_results < 100 or total_size >= MAX_LIMIT:
+                break
+
+            # Prepara para o próximo lote
+            START_PAGINATION += size_of_results
+            
+        except requests.exceptions.HTTPError as e:
+            st.error(f"❌ Erro HTTP ao conectar ao Confluence no espaço {space_key}: {e}")
+            return None
+        except Exception as e:
+            st.error(f"❌ Erro desconhecido durante a busca no espaço {space_key}: {e}")
+            return None
+            
+    # st.success(f"✅ Conexão bem-sucedida ao Confluence. Espaço {space_key} carregado.")
+    return clean_knowledge_base
         
 def create_vector_store(knowledge_base, client):
     """
@@ -178,21 +235,18 @@ def create_vector_store(knowledge_base, client):
 
 # --- 3. FUNÇÃO DE RESPOSTA RAG ---
 
-def gerar_resposta_rag(user_query, vector_index, documents, client):
+# --- 3. FUNÇÃO DE RESPOSTA RAG (CORRIGIDA) ---
+
+def gerar_resposta_rag(user_query, vector_index, documents, client, uploaded_file):
     """
     Busca o contexto relevante no índice FAISS e usa o Gemini para gerar uma resposta.
     """
-    # 1. Recuperação (Retrieval)
-
-    context = ""
-
-    # 🛑 ADICIONE ESTE BLOCO DE DEBUG 🛑
-    import streamlit as st
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Contexto Recuperado (DEBUG):")
-    st.sidebar.markdown(context) 
-    # 🛑 FIM DO BLOCO DE DEBUG 🛑
     
+    # 1. Recuperação (Retrieval)
+    contents = [] # Inicializa
+    
+    # ... (código de embedding da query, FAISS search e contexto)
+
     # Cria o embedding da pergunta do usuário
     query_embedding_response = client.models.embed_content(
         model='text-embedding-004',
@@ -200,11 +254,9 @@ def gerar_resposta_rag(user_query, vector_index, documents, client):
     )
 
     raw_query_vector = query_embedding_response.embeddings[0].values
-
-    # CORREÇÃO APLICADA AQUI: Notação de Ponto
     query_embedding = np.array(raw_query_vector, dtype=np.float32)
 
-    # Busca os 3 chunks mais relevantes
+    # Busca os 10 chunks mais relevantes
     D, I = vector_index.search(query_embedding.reshape(1, -1), k=10) 
 
     print("\n--- FAISS DEBUG ---")
@@ -219,50 +271,56 @@ def gerar_resposta_rag(user_query, vector_index, documents, client):
         return "Desculpe, nao encontrei informações relevantes na Base de conhecimento para esta busca."
     
     retrieved_texts = [documents[i]['text'] for i in valid_indices]
-
     context = "\n---\n".join(retrieved_texts)
 
-    # Constrói o contexto com o texto dos chunks recuperados
-    # retrieved_texts = [documents[i]['text'] for i in I[0] if i != -1]
+
+    # 2. Montagem Multimodal (CORRIGIDO: Escopo de contents.append())
     
-    #if not retrieved_texts:
-    #    return "Desculpe meu nobre, não encontrei informações relevantes na Base de Conhecimento de Suporte"
+    # 2.1 Adiciona a Imagem (Condicional)
+    if uploaded_file is not None:
+        try:
+            image_bytes = uploaded_file.read()
+            
+            # Adiciona o objeto da imagem
+            contents.append({
+                "inline_data": {
+                    "data": base64.b64encode(image_bytes).decode("utf-8"),
+                    "mime_type": uploaded_file.type 
+                }
+            })
+            
+            # Adiciona uma instrução textual específica para a imagem
+            contents.append(
+    "ATENÇÃO: Uma imagem/log foi anexada. Sua tarefa primária é realizar uma **Análise Técnica DEDUTIVA** para identificar o erro ou o procedimento. Utilize o 'CONTEXTO DE PROCEDIMENTO' (RAG) apenas como auxílio secundário. Se você conseguir identificar a causa ou solução pela imagem, ignore o RAG fallback."
+)
+            
+        except Exception as e:
+            st.warning(f"Não foi possível processar a imagem: {e}")
 
-    # context = "\n---\n".join(retrieved_texts)
-
-    # 2. Prompt Engineering
-    system_instruction = (
-    """
-    Você é o Rodrigo GPT, um Agente de Suporte Técnico da E-DEPLOY. Sua função é ser proativo, respeitoso e fornecer soluções e procedimentos claros.
-
-    REGRAS OBRIGATÓRIAS DE RESPOSTA (RAG):
-    1. Utilize **APENAS** as informações contidas no 'CONTEXTO DE PROCEDIMENTO' fornecido para gerar sua resposta.
-    2. Se o CONTEXTO contiver o passo a passo de um procedimento, estruture sua resposta em **passos claros e numerados (Ex: 1. Acessar..., 2. Clicar..., etc.)**.
-    3. Mantenha a resposta objetiva, focando na solução.
-
-    LIMITE DE CONHECIMENTO:
-    1. Se o CONTEXTO não contiver o procedimento solicitado, **VOCÊ DEVE IGNORAR TOTALMENTE O CONTEÚDO IRRELEVANTE** (como Sefaz, RAID ou outros tópicos) e aplicar a resposta de *fallback*.
-    2. Resposta de *fallback* **OBRIGATÓRIA**: "Não encontrei o procedimento solicitado na Base de Conhecimento."
-    3. Se o CONTEXTO contiver o procedimento, utilize-o para gerar a resposta em passos.
-    4. Não responda a perguntas sobre saúde, medicamentos ou questões jurídicas.
-
-    PERSONA:
-    - Se a pergunta for "quem é voce?", responda: "Olá, sou Rodrigo GPT, um grande fã de churros e comida."
-    """)
-
-    prompt = (
-        f"INSTRUÇÃO: {system_instruction}\n\n"
-        f"CONTEXTO DE PROCEDIMENTO:\n{context}\n\n"
-        f"PERGUNTA DO USUÁRIO: {user_query}"
+    # 2.2 Constrói e Anexa o Prompt RAG Principal (EXECUTADO SEMPRE)
+    full_prompt = (
+        f"{SYSTEM_INSTRUCTION}\n\n" # <--- Usa a constante GLOBAL
+        f"PERGUNTA DO USUÁRIO: {user_query}\n\n"
+        f"CONTEXTO DE PROCEDIMENTO:\n{context}"
     )
+
+    contents.append(full_prompt) # <--- ESSA LINHA AGORA ESTÁ FORA DO IF DA IMAGEM
+    
+    # DEBUG: Para confirmar que a lista não está vazia.
+    print(f"DEBUG FINAL: Contents len: {len(contents)}")
+
 
     # 3. Geração
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=prompt
-    )
-    return response.text
-
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash", 
+            contents=contents 
+        )
+        return response.text
+        
+    except Exception as e:
+        print(f"Erro na chamada do Gemini API: {e}")
+        return "❌ Desculpe, houve uma falha de comunicação com o serviço de IA. Tente novamente, ou verifique sua chave de API."
 # --- 4. LÓGICA PRINCIPAL DO STREAMLIT ---
 
 st.set_page_config(
@@ -273,38 +331,66 @@ st.set_page_config(
 st.title("Agente de Suporte (Rodrigo GPT🤓🐋)")
 st.markdown("Olá!! Sou Rodrigo GPT, seu assistente de suporte para consulta de dúvidas e procedimento.")
 st.markdown("---")
+with st.expander("🖼️ Clique aqui para enviar uma Evidência, Captura de Tela ou Log para leitura"):
+    uploaded_file = st.file_uploader(
+        "Selecione a imagem (PNG, JPG, JPEG) para o agente analisar:",
+        type=["png", "jpg", "jpeg"]
+    )
+    if uploaded_file:
+        st.image(uploaded_file, caption="Imagem Carregada com Sucesso", width=200)
+#uploaded_file = st.file_uploader(
+#    "Ou envie uma captura de tela para análise do erro:",
+#    type=["png", "jpg", "jpeg"]
+#)
+#with st.sidebar.expander("📎 Anexar Imagem para Análise"):
+#    uploaded_file = st.file_uploader(
+#        "Selecione a captura de tela (PNG, JPG):",
+#        type=["png", "jpg", "jpeg"]
+#    )
 
-# Removendo st.text_area isolado, pois a entrada de chat é mais eficiente
+#user_query = st.chat_input("Qual a sua dúvida ou procedimento?")
+
+
 
 # Função get_respondendo_pergunta removida pois não era usada
 
 if 'vector_index' not in st.session_state:
-    # 1. INGESTÃO/CARREGAMENTO
-    with st.spinner("⏳ Carregando ou Ingerindo Base de Conhecimento do Confluence..."):
+    knowledge_base = []
+    log_messages = []
+    
+    # 1. Mensagem amigável para o usuário
+    with st.spinner("😵 Aguarde um momento, estou acessando minha base de conhecimento para te auxiliar nas suas questões..."):
         
-        knowledge_base = busca_conteudo_confluence(SPACE_KEY)
-        
-        if knowledge_base:
-            st.sidebar.subheader("Páginas Ingeridas (DEBUG):")
-            for item in knowledge_base:
-                st.sidebar.markdown(f"- **{item['title']}** (Tamanho: {len(item['text'])} chars)")
+        # Itera sobre CADA espaço
+        for space in SPACE_KEY:
+            
+            # Não exibe o st.info para o usuário final, apenas registra para debug
+            log_messages.append(f"Iniciando busca no espaço: {space}") 
+            
+            space_data = busca_conteudo_confluence(space)
+            
+            if space_data:
+                knowledge_base.extend(space_data)
+            else:
+                # Mantém o warning visível para o desenvolvedor em caso de falha
+                st.warning(f"⚠️ Não foi possível carregar o conteúdo do espaço {space}. Verifique permissões.") 
 
-            if knowledge_base and len(knowledge_base[0]['text']) > 100:
-                st.sidebar.markdown("---")
-                st.sidebar.subheader("Primeiro Chunk Exemplo:")
-                st.sidebar.code(knowledge_base[0]['text'][:200] + "...")
+        if knowledge_base:
             try:
+                # 2. Criação do Vector Store
                 vector_index, documents = create_vector_store(knowledge_base, client)
                 
                 st.session_state['vector_index'] = vector_index
                 st.session_state['documents'] = documents
-                st.success("✅ Base de Conhecimento Carregada com Sucesso!")
+                
+                # Mensagem final de sucesso (aparece após o spinner desaparecer)
+                st.success(f"✅ Base de Conhecimento Carregada com Sucesso! Total de páginas: {len(knowledge_base)}.")
             
             except Exception as e:
                 st.error(f"❌ Erro fatal durante o Embedding ou FAISS: {e}")
                 st.stop()
         else:
-            st.error("❌ Erro fatal: Não foi possível carregar o conteúdo do Confluence.")
+            st.error("❌ Erro fatal: Nenhuma base de conhecimento pôde ser carregada.")
             st.stop()
 
 # Garante que as variáveis estejam disponíveis
@@ -313,32 +399,63 @@ documents = st.session_state['documents']
 
 # 2. LÓGICA DO CHAT
 
+# --- 2. LÓGICA DO CHAT (CORRIGIDA) ---
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Exibe o histórico de mensagens
+# Exibe o histórico de mensagens PRIMEIRO
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Captura a entrada do usuário
-if prompt := st.chat_input("Pergunte sobre um procedimento ou erro..."):
+# Captura a entrada do usuário e inicia a lógica POR SEGUNDO
+if user_query := st.chat_input("Qual a sua dúvida ou procedimento?"):
     
-    # CORREÇÃO: st.session_state.messages.append
-    st.session_state.messages.append({"role": "user", "content": prompt}) 
+    # 1. Adicionar a pergunta do usuário ao histórico
+    st.session_state.messages.append({"role": "user", "content": user_query})
     
+    # 2. Exibir a pergunta do usuário no chat (sem duplicidade, pois o histórico já foi exibido)
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(user_query)
 
     with st.spinner("🤖 Buscando e analisando procedimentos..."):
         try:
-            full_response = gerar_resposta_rag(prompt, vector_index, documents, client)
+            # 3. Gerar a resposta RAG
+            full_response = gerar_resposta_rag(
+                user_query, 
+                vector_index, 
+                documents, 
+                client,
+                uploaded_file
+            )
         except Exception as e:
-            full_response = f"Ocorreu um erro ao gerar a resposta: {e}"
+            full_response = f"❌ Ocorreu um erro ao gerar a resposta: {e}"
 
+    # 4. Exibir a resposta do assistente e salvar no histórico
     with st.chat_message("assistant"):
         st.markdown(full_response)
         st.session_state.messages.append({"role": "assistant", "content": full_response})
+
+
+# Captura a entrada do usuário
+#if prompt := st.chat_input("Pergunte sobre um procedimento ou erro..."):
+    
+    # CORREÇÃO: st.session_state.messages.append
+#    st.session_state.messages.append({"role": "user", "content": prompt}) 
+#    
+#    with st.chat_message("user"):
+#        st.markdown(prompt)
+
+#    with st.spinner("🤖 Buscando e analisando procedimentos..."):
+#        try:
+#            full_response = gerar_resposta_rag(prompt, vector_index, documents, client)
+#        except Exception as e:
+#            full_response = f"Ocorreu um erro ao gerar a resposta: {e}"
+
+#    with st.chat_message("assistant"):
+#        st.markdown(full_response)
+#        st.session_state.messages.append({"role": "assistant", "content": full_response})
 
 
 # O bloco 'if __name__ == "__main__":' foi removido e sua lógica integrada ao Streamlit.
