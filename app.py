@@ -8,19 +8,22 @@ import json
 import numpy as np # Adicionado
 import faiss # Adicionado
 from langchain_text_splitters import RecursiveCharacterTextSplitter # Adicionado
+import re
 
 # --- 1. CONFIGURAÇÕES E VARIÁVEIS ---
 # ATENÇÃO: É recomendado usar st.secrets ou variáveis de ambiente para estas chaves.
 # Deixei como variáveis diretas para fins de restauração, mas remova antes de fazer commit!
-api_key = "xxxx"
+api_key = "424524-m7BfEekEjf8NDyo9q8OAhKS_GY"
 ATLASSIAN_USER = "valdinei.borges@e-deploy.com.br"
-ATLASSIAN_TOKEN = "xxxx-HeQXotkpCj3tN1LzABhvv0MaI2GkZqDoTII98=FA994E2B"
+CONFLUENCE_API_TOKEN = "424242242-t8rywaXFnOz36_swzXQyZezNIFOB9mGDAEgBBmqenUjsiACi01aSoBmSRvmnsFsT_dQh3H1PJv9KQrUSN6XeMnLl9slx4JMAOda1qCZLkZ5Q=646F09C3"
 CONFLUENCE_URL = "https://edeploy.atlassian.net"
+JIRA_API_TOKEN = "24242424-htrac52uD0joqtZ828Z1Ym6_o=77126236"
 
 CONFLUENCE_URL = "https://edeploy.atlassian.net"
-USER_EMAIL = "valdinei.borges@e-deploy.com.br"
-API_TOKEN = "xxx-HeQXotkpCj3tN1LzABhvv0MaI2GkZqDoTII98=FA994E2B"
+USER_EMAIL = "valdinei.borges@e-deploy.com.br".strip()
+CONFLUENCE_API_TOKEN = "24242424-t8rywaXFnOz36_swzXQyZezNIFOB9mGDAEgBBmqenUjsiACi01aSoBmSRvmnsFsT_dQh3H1PJv9KQrUSN6XeMnLl9slx4JMAOda1qCZLkZ5Q=646F09C3".strip()
 SPACE_KEY = ["SPOS2", "SPOS1"]
+
 
 # --- 1. CONFIGURAÇÕES E VARIÁVEIS (Atualizado) ---
 # ... (seus imports e outras variáveis)
@@ -34,22 +37,22 @@ Você é o **Rodrigo GPT**, um Agente de Suporte Técnico da E-DEPLOY. Sua funç
 
 **REGRAS DE CONDUTA:**
 1. **Persona:** Se a pergunta for "quem é voce?", responda: "Olá, sou Rodrigo GPT, um grande fã de churros e comida."
-2. **Prioridade RAG/SOLUÇÃO:** Se houver 'CONTEXTO DE PROCEDIMENTO' e/ou análise de imagem/log que forneça uma solução, utilize-os para estruturar sua resposta em passos claros e numerados.
-3. **OBJETIVIDADE:** Mantenha a resposta concisa e profissional.
+2. **Prioridade na Solução:** Utilize o contexto fornecido (JIRA, Confluence RAG e Imagem) para gerar a melhor resposta.
 
-**PRIORIDADE DE ANÁLISE (IMPORTANTE):**
-- Se uma imagem ou log estiver presente, a análise visual e técnica DEVE ser o primeiro passo.
+**PRIORIDADE DE CONTEXTO E GERAÇÃO:**
+1. **JIRA (Primeira Prioridade):** Se houver tickets JIRA relacionados no contexto:
+    * **Se o ticket estiver RESOLVIDO/FECHADO** e o resumo for uma solução clara, use-o para informar a solução e forneça o link do ticket como **referência final**.
+    * **Se o ticket estiver ABERTO/EM ANDAMENTO**, informe o usuário que o time de suporte já está ciente e trabalhando no problema, fornecendo a chave do ticket (ex: "O erro já está sendo tratado no ticket X-123.").
+2. **Confluence RAG (Segunda Prioridade):** Se o JIRA não fornecer uma solução clara (ou se não houver tickets), utilize **APENAS** o 'CONTEXTO DE PROCEDIMENTO' do Confluence para gerar um passo a passo. Caso não encontre nenhum procedimento para ajudar o usuario, recomende unir todas as informações que conseguir referente ao problema e emcaminhar o chamado para o time de N4.
+3. **Análise Multimodal:** Se uma imagem ou log estiver presente, realize a análise dedutiva antes de aplicar o RAG.
 
-**LIMITE DE CONHECIMENTO E FALLBACK (ÚLTIMO RECURSO):**
-1. **Utilize APENAS** as informações contidas no 'CONTEXTO DE PROCEDIMENTO' E na análise de imagem.
-2. **Se o CONTEXTO estiver vazio E a imagem não for clara o suficiente para solução**, utilize o seguinte fallback **EXCLUSIVO**: "Não encontrei o procedimento solicitado na Base de Conhecimento."
+**LIMITE DE CONHECIMENTO E FALLBACK (Último Recurso):**
+1. **Utilize APENAS** as informações contidas no 'CONTEXTO DE PROCEDIMENTO' e na análise de imagem.
+2. **Se NENHUM contexto (JIRA, Confluence, Imagem) fornecer uma solução clara**, utilize o seguinte fallback **EXCLUSIVO**: "Não encontrei o procedimento solicitado na Base de Conhecimento. Peço que solicite ajude interna para lhe ajudar com isso. Vou voltar a comer meu Churros."
 3. Não responda a perguntas sobre saúde, medicamentos ou questões jurídicas.
-
-PERSONA:
-- Se a pergunta for "quem é voce?", responda: "Olá, sou Rodrigo GPT, um grande fã de churros e comida."
 """
 
-if not all([CONFLUENCE_URL, USER_EMAIL, API_TOKEN]):
+if not all([CONFLUENCE_URL, USER_EMAIL, CONFLUENCE_API_TOKEN]):
     st.error("ERRO: Configure as variaveis de ambiente (ATLASSIAN_USER, ATLASSIAN_TOKEN e CONFLUENCE_URL).")
     st.stop()
 
@@ -67,7 +70,7 @@ def get_auth_headers():
     """
     Cria um cabeçalho de autenticação (Basic Auth).
     """
-    auth_string = f"{USER_EMAIL}:{API_TOKEN}"
+    auth_string = f"{USER_EMAIL}:{CONFLUENCE_API_TOKEN}"
     encoded_auth = base64.b64encode(auth_string.encode()).decode()
     return{
         "Authorization": f"Basic {encoded_auth}",
@@ -89,7 +92,7 @@ def busca_conteudo_confluence(space_key):
     """
     Busca todas as páginas de um Space Key, extrai o conteúdo limpo e implementa a paginação.
     """
-    auth_credentials = (USER_EMAIL.strip(), API_TOKEN.strip()) 
+    auth_credentials = (USER_EMAIL.strip(), CONFLUENCE_API_TOKEN.strip()) 
     headers = {"Accept": "application/json"}
     
     # Parâmetros de busca
@@ -152,6 +155,95 @@ def busca_conteudo_confluence(space_key):
             
     # st.success(f"✅ Conexão bem-sucedida ao Confluence. Espaço {space_key} carregado.")
     return clean_knowledge_base
+
+## 2.1 FUNÇÕES DE INTEGRAÇÃO COM JIRA
+
+## 2.1 FUNÇÕES DE INTEGRAÇÃO COM JIRA (CORRIGIDA)
+
+def busca_chamados_jira(user_query, max_results=3):
+    """
+    Busca tickets do JIRA relevantes usando a consulta do usuário como JQL,
+    incluindo busca por chaves de ticket exatas (ex: OXAP-5208).
+    """
+    jira_url = f"{CONFLUENCE_URL}/rest/api/2/search"
+    auth_credentials = (USER_EMAIL.strip(), JIRA_API_TOKEN.strip()) 
+    
+    # 1. Detectar chaves de ticket exatas na query (Ex: OXAP-5208)
+    # Regex: 2+ letras maiúsculas, um hífen, 1+ números
+    jira_key_pattern = r'([A-Z]{2,}-\d+)'
+    explicit_keys = re.findall(jira_key_pattern, user_query.upper())
+    
+    jql_parts = []
+    
+    # 2. Adiciona busca por texto (para logs e descrições)
+    jql_parts.append(f'text ~ "{user_query}"')
+    
+    # 3. Adiciona busca por chave exata (Se uma chave foi detectada)
+    if explicit_keys:
+        # Garante unicidade e formata como 'key = "KEY1" OR key = "KEY2"'
+        key_clauses = [f'key = "{key}"' for key in set(explicit_keys)]
+        # Adicionamos 'key' ao JQL para buscar o ticket exato
+        jql_parts.append(" OR ".join(key_clauses))
+
+    # 4. Combina as partes: (text search) OR (key search)
+    jql_query = f'{jql_parts[0]}' # Começa com a busca de texto
+    if len(jql_parts) > 1:
+        # Se houver chaves explícitas, adiciona a cláusula OR
+        jql_query = f'({jql_query}) OR ({jql_parts[1]})'
+        
+    jql_query = f'{jql_query} ORDER BY updated DESC'
+    
+    payload = {
+        "jql": jql_query,
+        "fields": ["key", "summary", "status", "resolution", "issuetype"],
+        "maxResults": max_results
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+    print(f"DEBUG JIRA JQL FINAL: {jql_query}") # Debug para você confirmar a JQL
+    
+    try:
+        response = requests.post(jira_url, headers=headers, auth=auth_credentials, data=json.dumps(payload))
+        
+        # --- CÓDIGO DE DEBUG CRÍTICO ---
+        print(f"JIRA: Status da Resposta HTTP: {response.status_code}")
+        if response.status_code != 200:
+             print(f"JIRA: Corpo da Resposta de Erro: {response.text}")
+        # -------------------------------
+        
+        response.raise_for_status()
+        
+        data = response.json()
+        tickets = []
+        
+        for issue in data.get('issues', []):
+            ticket_key = issue['key']
+            summary = issue['fields']['summary']
+            status = issue['fields']['status']['name']
+            
+            resolution = issue['fields'].get('resolution', {}).get('name', 'N/A')
+            issue_type = issue['fields']['issuetype']['name']
+            
+            ticket_context = (
+                f"Ticket JIRA: {ticket_key} ({issue_type})\n"
+                f"Status: {status} (Resolução: {resolution})\n"
+                f"Resumo: {summary}\n"
+                f"Link: {CONFLUENCE_URL}/browse/{ticket_key}"
+            )
+            tickets.append(ticket_context)
+            
+        return tickets
+
+    except requests.exceptions.HTTPError as e:
+        # Mensagem mais clara sobre permissões ou token
+        print(f"ERRO JIRA HTTP: Verifique o USER_EMAIL e CONFLUENCE_API_TOKEN/permissões. {e}")
+        return None
+    except Exception as e:
+        print(f"ERRO JIRA DESCONHECIDO: {e}")
+        return None
         
 def create_vector_store(knowledge_base, client):
     """
@@ -238,8 +330,22 @@ def create_vector_store(knowledge_base, client):
 
 def gerar_resposta_rag(user_query, vector_index, documents, client, uploaded_file):
     """
-    Busca o contexto relevante no índice FAISS e usa o Gemini para gerar uma resposta.
+    1. Busca tickets JIRA. 
+    2. Busca contexto Confluence (RAG).
+    3. Usa Gemini para gerar uma resposta.
     """
+    contents = []
+    
+    # === NOVO: BUSCA JIRA ===
+    jira_tickets = busca_chamados_jira(user_query, max_results=3)
+    jira_context = ""
+    
+    if jira_tickets:
+        jira_context = "\n\n--- TICKETS JIRA RELACIONADOS ---\n" + "\n---\n".join(jira_tickets)
+        print(f"DEBUG: {len(jira_tickets)} tickets JIRA encontrados.")
+    else:
+        print("DEBUG: Nenhum ticket JIRA relevante encontrado.")
+    # ========================
     
     # 1. Recuperação (Retrieval)
     contents = [] # Inicializa
@@ -298,10 +404,13 @@ def gerar_resposta_rag(user_query, vector_index, documents, client, uploaded_fil
 
     # 2.2 Constrói e Anexa o Prompt RAG Principal (EXECUTADO SEMPRE)
     full_prompt = (
-        f"{SYSTEM_INSTRUCTION}\n\n" # <--- Usa a constante GLOBAL
-        f"PERGUNTA DO USUÁRIO: {user_query}\n\n"
-        f"CONTEXTO DE PROCEDIMENTO:\n{context}"
-    )
+    f"{SYSTEM_INSTRUCTION}\n\n"
+    f"PERGUNTA DO USUÁRIO: {user_query}\n\n"
+    # === AJUSTE AQUI: ADICIONA O CONTEXTO JIRA ===
+    f"CONTEXTO DE PROCEDIMENTO:\n{context}\n\n"
+    f"{jira_context}" 
+    # ============================================
+)
 
     contents.append(full_prompt) # <--- ESSA LINHA AGORA ESTÁ FORA DO IF DA IMAGEM
     
@@ -358,7 +467,7 @@ if 'vector_index' not in st.session_state:
     log_messages = []
     
     # 1. Mensagem amigável para o usuário
-    with st.spinner("😵 Aguarde um momento, estou acessando minha base de conhecimento para te auxiliar nas suas questões..."):
+    with st.spinner("😵 Aguarde um momento, estou acessando minha base de conhecimento para te auxiliar nas suas questões...\n Alias, já viu seu email hoje?"):
         
         # Itera sobre CADA espaço
         for space in SPACE_KEY:
@@ -437,25 +546,3 @@ if user_query := st.chat_input("Qual a sua dúvida ou procedimento?"):
         st.session_state.messages.append({"role": "assistant", "content": full_response})
 
 
-# Captura a entrada do usuário
-#if prompt := st.chat_input("Pergunte sobre um procedimento ou erro..."):
-    
-    # CORREÇÃO: st.session_state.messages.append
-#    st.session_state.messages.append({"role": "user", "content": prompt}) 
-#    
-#    with st.chat_message("user"):
-#        st.markdown(prompt)
-
-#    with st.spinner("🤖 Buscando e analisando procedimentos..."):
-#        try:
-#            full_response = gerar_resposta_rag(prompt, vector_index, documents, client)
-#        except Exception as e:
-#            full_response = f"Ocorreu um erro ao gerar a resposta: {e}"
-
-#    with st.chat_message("assistant"):
-#        st.markdown(full_response)
-#        st.session_state.messages.append({"role": "assistant", "content": full_response})
-
-
-# O bloco 'if __name__ == "__main__":' foi removido e sua lógica integrada ao Streamlit.
-# A função de chat do Streamlit já é o bloco principal de execução.
