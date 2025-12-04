@@ -9,9 +9,10 @@ Olá! Bem-vindo ao projeto do Rodrigo GPT, um assistente de suporte inteligente 
 - Integração JIRA (Em Breve): Buscar tickets relacionados à dúvida do usuário para fornecer respostas mais rápidas e vinculadas a soluções existentes.
 ---
 🛠️ Configuração e InstalaçãoSiga os passos abaixo para configurar e rodar o Rodrigo GPT em sua máquina.
-1. Pré-requisitosCertifique-se de ter o Python (3.9+) instalado em seu ambiente.
+1. Pré-requisitos
+   Certifique-se de ter o Python (3.9+) instalado em seu ambiente.
 
-2. Clonar o RepositórioAbra seu terminal ou prompt de comando e clone o projeto do GitHub:
+3. Clonar o RepositórioAbra seu terminal ou prompt de comando e clone o projeto do GitHub:
 
 ```
 git clone https://docs.github.com/pt/migrations/importing-source-code/using-the-command-line-to-import-source-code/adding-locally-hosted-code-to-github
