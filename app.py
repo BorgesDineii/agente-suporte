@@ -15,13 +15,13 @@ import re
 # Deixei como variáveis diretas para fins de restauração, mas remova antes de fazer commit!
 api_key = "424524-m7BfEekEjf8NDyo9q8OAhKS_GY"
 ATLASSIAN_USER = "valdinei.borges@e-deploy.com.br"
-CONFLUENCE_API_TOKEN = "424242242-t8rywaXFnOz36_swzXQyZezNIFOB9mGDAEgBBmqenUjsiACi01aSoBmSRvmnsFsT_dQh3H1PJv9KQrUSN6XeMnLl9slx4JMAOda1qCZLkZ5Q=646F09C3"
+CONFLUENCE_API_TOKEN = "dadadadadQh3H1PJv9KQrUSN6XeMnLl9slx4JMAOda1qCZLkZ5Q=646F09C3"
 CONFLUENCE_URL = "https://edeploy.atlassian.net"
 JIRA_API_TOKEN = "24242424-htrac52uD0joqtZ828Z1Ym6_o=77126236"
 
 CONFLUENCE_URL = "https://edeploy.atlassian.net"
 USER_EMAIL = "valdinei.borges@e-deploy.com.br".strip()
-CONFLUENCE_API_TOKEN = "24242424-t8rywaXFnOz36_swzXQyZezNIFOB9mGDAEgBBmqenUjsiACi01aSoBmSRvmnsFsT_dQh3H1PJv9KQrUSN6XeMnLl9slx4JMAOda1qCZLkZ5Q=646F09C3".strip()
+CONFLUENCE_API_TOKEN = "adasdasdT_dQh3H1PJv9KQrUSN6XeMnLl9slx4JMAOda1qCZLkZ5Q=646F09C3".strip()
 SPACE_KEY = ["SPOS2", "SPOS1"]
 
 
