@@ -22,7 +22,6 @@ USER_EMAIL = "valdinei.borges@e-deploy.com.br"
 API_TOKEN = "xxx-HeQXotkpCj3tN1LzABhvv0MaI2GkZqDoTII98=FA994E2B"
 SPACE_KEY = ["SPOS2", "SPOS1"]
 
-
 # --- 1. CONFIGURAÇÕES E VARIÁVEIS (Atualizado) ---
 # ... (seus imports e outras variáveis)
 
