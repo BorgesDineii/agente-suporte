@@ -13,14 +13,16 @@ import re
 # --- 1. CONFIGURAÇÕES E VARIÁVEIS ---
 # ATENÇÃO: É recomendado usar st.secrets ou variáveis de ambiente para estas chaves.
 # Deixei como variáveis diretas para fins de restauração, mas remova antes de fazer commit!
+api_key = "424524-m7BfEekEjf8NDyo9q8OAhKS_GY"
+ATLASSIAN_USER = "valdinei.borges@e-deploy.com.br"
+CONFLUENCE_API_TOKEN = "dadadadadQh3H1PJv9KQrUSN6XeMnLl9slx4JMAOda1qCZLkZ5Q=646F09C3"
+CONFLUENCE_URL = "https://edeploy.atlassian.net"
+JIRA_API_TOKEN = "24242424-htrac52uD0joqtZ828Z1Ym6_o=77126236"
 
-
-
-# --- 1. CONFIGURAÇÕES E VARIÁVEIS (Atualizado) ---
-# ... (seus imports e outras variáveis)
-
-# Remova o 'SPACE_KEY' singular e use o plural 'SPACE_KEYS'
-SPACE_KEYS = ["SPOS2", "SPOS1"] # CORRIGIDO: Nome da variável de iteração
+CONFLUENCE_URL = "https://edeploy.atlassian.net"
+USER_EMAIL = "valdinei.borges@e-deploy.com.br".strip()
+CONFLUENCE_API_TOKEN = "adasdasdT_dQh3H1PJv9KQrUSN6XeMnLl9slx4JMAOda1qCZLkZ5Q=646F09C3".strip()
+SPACE_KEY = ["SPOS2", "SPOS1"]
 
 # Sua instrução de sistema DEVE ser global (remova a definição da função gerar_resposta_rag)
 SYSTEM_INSTRUCTION = """
@@ -151,35 +153,38 @@ def busca_conteudo_confluence(space_key):
 
 ## 2.1 FUNÇÕES DE INTEGRAÇÃO COM JIRA (CORRIGIDA)
 
+## 2.1 FUNÇÕES DE INTEGRAÇÃO COM JIRA (CORREÇÃO FINAL DE AUTENTICAÇÃO)
+
 def busca_chamados_jira(user_query, max_results=3):
     """
-    Busca tickets do JIRA relevantes usando a consulta do usuário como JQL,
-    incluindo busca por chaves de ticket exatas (ex: OXAP-5208).
+    Busca tickets do JIRA relevantes usando JQL, forçando a autenticação
+    via Header Authorization (Base64) para maior robustez.
     """
-    jira_url = f"{CONFLUENCE_URL}/rest/api/2/search"
-    auth_credentials = (USER_EMAIL.strip(), JIRA_API_TOKEN.strip()) 
+    jira_url = f"{CONFLUENCE_URL}/rest/api/3/search/jql"
     
-    # 1. Detectar chaves de ticket exatas na query (Ex: OXAP-5208)
-    # Regex: 2+ letras maiúsculas, um hífen, 1+ números
+    # 1. Autenticação Basic Auth em Base64
+    auth_string = f"{USER_EMAIL}:{JIRA_API_TOKEN}"
+    encoded_auth = base64.b64encode(auth_string.encode()).decode()
+    
+    headers = {
+        "Authorization": f"Basic {encoded_auth}", # <--- FORMATO FINAL CORRIGIDO
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+    
+    # 2. Lógica JQL (mantida)
     jira_key_pattern = r'([A-Z]{2,}-\d+)'
     explicit_keys = re.findall(jira_key_pattern, user_query.upper())
     
     jql_parts = []
-    
-    # 2. Adiciona busca por texto (para logs e descrições)
     jql_parts.append(f'text ~ "{user_query}"')
     
-    # 3. Adiciona busca por chave exata (Se uma chave foi detectada)
     if explicit_keys:
-        # Garante unicidade e formata como 'key = "KEY1" OR key = "KEY2"'
         key_clauses = [f'key = "{key}"' for key in set(explicit_keys)]
-        # Adicionamos 'key' ao JQL para buscar o ticket exato
         jql_parts.append(" OR ".join(key_clauses))
 
-    # 4. Combina as partes: (text search) OR (key search)
-    jql_query = f'{jql_parts[0]}' # Começa com a busca de texto
+    jql_query = f'{jql_parts[0]}'
     if len(jql_parts) > 1:
-        # Se houver chaves explícitas, adiciona a cláusula OR
         jql_query = f'({jql_query}) OR ({jql_parts[1]})'
         
     jql_query = f'{jql_query} ORDER BY updated DESC'
@@ -189,27 +194,24 @@ def busca_chamados_jira(user_query, max_results=3):
         "fields": ["key", "summary", "status", "resolution", "issuetype"],
         "maxResults": max_results
     }
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-    }
 
-    print(f"DEBUG JIRA JQL FINAL: {jql_query}") # Debug para você confirmar a JQL
+    print(f"DEBUG JIRA JQL FINAL: {jql_query}")
     
     try:
-        response = requests.post(jira_url, headers=headers, auth=auth_credentials, data=json.dumps(payload))
+        # --- A requisição agora usa APENAS o 'headers' e NÃO o 'auth=' ---
+        response = requests.post(jira_url, headers=headers, data=json.dumps(payload))
         
-        # --- CÓDIGO DE DEBUG CRÍTICO ---
+        # CÓDIGO DE DEBUG CRÍTICO (Manter)
         print(f"JIRA: Status da Resposta HTTP: {response.status_code}")
         if response.status_code != 200:
              print(f"JIRA: Corpo da Resposta de Erro: {response.text}")
-        # -------------------------------
         
         response.raise_for_status()
         
         data = response.json()
         tickets = []
         
+        # ... (O restante da função de processamento dos tickets é mantido) ...
         for issue in data.get('issues', []):
             ticket_key = issue['key']
             summary = issue['fields']['summary']
@@ -229,8 +231,7 @@ def busca_chamados_jira(user_query, max_results=3):
         return tickets
 
     except requests.exceptions.HTTPError as e:
-        # Mensagem mais clara sobre permissões ou token
-        print(f"ERRO JIRA HTTP: Verifique o USER_EMAIL e CONFLUENCE_API_TOKEN/permissões. {e}")
+        print(f"ERRO JIRA HTTP: Verifique o USER_EMAIL e JIRA_API_TOKEN/permissões. {e}")
         return None
     except Exception as e:
         print(f"ERRO JIRA DESCONHECIDO: {e}")
@@ -394,14 +395,25 @@ def gerar_resposta_rag(user_query, vector_index, documents, client, uploaded_fil
             st.warning(f"Não foi possível processar a imagem: {e}")
 
     # 2.2 Constrói e Anexa o Prompt RAG Principal (EXECUTADO SEMPRE)
+    if jira_context:
+        jira_block = f"--- CONTEXTO JIRA PRIORITÁRIO ---\n{jira_context}\n"
+    else:
+        jira_block = "--- CONTEXTO JIRA PRIORITÁRIO ---\nNenhum ticket JIRA relevante foi encontrado no momento.\n"
+        
+    # 2.2.2 Monta o Bloco de Contexto Confluence
+    confluence_block = f"--- CONTEXTO DE PROCEDIMENTO ---\n{context}\n"
+        
     full_prompt = (
     f"{SYSTEM_INSTRUCTION}\n\n"
     f"PERGUNTA DO USUÁRIO: {user_query}\n\n"
-    # === AJUSTE AQUI: ADICIONA O CONTEXTO JIRA ===
-    f"CONTEXTO DE PROCEDIMENTO:\n{context}\n\n"
-    f"{jira_context}" 
+    # === FORÇA A PRIORIDADE DO JIRA AQUI ===
+    f"{jira_block}\n" 
+    f"{confluence_block}"
     # ============================================
 )
+    
+    # Debug para ver a ordem final
+    print(f"DEBUG PROMPT ORDENADO: JIRA Context Length: {len(jira_context)}")
 
     contents.append(full_prompt) # <--- ESSA LINHA AGORA ESTÁ FORA DO IF DA IMAGEM
     
