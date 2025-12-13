@@ -13,7 +13,7 @@ import re # Essencial para buscar chaves JIRA como OXAP-5208
 # --- 1. CONFIGURAÇÕES E VARIÁVEIS ---
 # ATENÇÃO: É recomendado usar st.secrets ou variáveis de ambiente para estas chaves.
 # Deixei como variáveis diretas para fins de restauração, mas remova antes de fazer commit!
-
+a
 
 # --- 1. CONFIGURAÇÕES E VARIÁVEIS (Atualizado) ---
 # ... (seus imports e outras variáveis)
