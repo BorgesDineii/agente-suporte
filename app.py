@@ -13,7 +13,16 @@ import re # Essencial para buscar chaves JIRA como OXAP-5208
 # --- 1. CONFIGURAÇÕES E VARIÁVEIS ---
 # ATENÇÃO: É recomendado usar st.secrets ou variáveis de ambiente para estas chaves.
 # Deixei como variáveis diretas para fins de restauração, mas remova antes de fazer commit!
-a
+API_JIRA = "CCCD-CDCDCD=BD8EB151"
+api_key = "AIzaSyAuqvAA-m7BfEekEjf8NDyo9q8OAhKS_GY"
+ATLASSIAN_USER = "valdinei.borges@e-deploy.com.br"
+ATLASSIAN_TOKEN = "DCDCDCD-=BD8EB151"
+CONFLUENCE_URL = "https://edeploy.atlassian.net"
+
+CONFLUENCE_URL = "https://edeploy.atlassian.net"
+USER_EMAIL = "valdinei.borges@e-deploy.com.br"
+API_TOKEN = "DCDCDCD=BD8EB151"
+# SPACE_KEY = "SPOS2"
 
 # --- 1. CONFIGURAÇÕES E VARIÁVEIS (Atualizado) ---
 # ... (seus imports e outras variáveis)
@@ -44,7 +53,7 @@ Você é o **Rodrigo GPT**, um Agente de Suporte Técnico da E-DEPLOY. Sua funç
 2. **Se NENHUM contexto (JIRA, Confluence, Imagem) fornecer uma solução clara**, utilize o seguinte fallback **EXCLUSIVO**: "Não encontrei o procedimento solicitado na Base de Conhecimento. Peço que solicite ajuda interna para lhe ajudar com isso. Vou voltar a comer meu Churros."
 """
 
-if not all([CONFLUENCE_URL, USER_EMAIL, CONFLUENCE_API_TOKEN
+if not all([CONFLUENCE_URL, USER_EMAIL, API_TOKEN
 ]):
     st.error("ERRO: Configure as variaveis de ambiente (ATLASSIAN_USER, ATLASSIAN_TOKEN e CONFLUENCE_URL).")
     st.stop()
@@ -63,7 +72,7 @@ def get_auth_headers():
     """
     Cria um cabeçalho de autenticação (Basic Auth).
     """
-    auth_string = f"{USER_EMAIL}:{CONFLUENCE_API_TOKEN}"
+    auth_string = f"{USER_EMAIL}:{API_TOKEN}"
     encoded_auth = base64.b64encode(auth_string.encode()).decode()
     return{
         "Authorization": f"Basic {encoded_auth}",
@@ -85,7 +94,7 @@ def busca_conteudo_confluence(space_key):
     """
     Busca todas as páginas de um Space Key, extrai o conteúdo limpo e implementa a paginação.
     """
-    auth_credentials = (USER_EMAIL.strip(), CONFLUENCE_API_TOKEN.strip()) 
+    auth_credentials = (USER_EMAIL.strip(), API_TOKEN.strip()) 
     headers = {"Accept": "application/json"}
     
     # Parâmetros de busca
@@ -197,7 +206,11 @@ def create_vector_store(knowledge_base, client):
 
             batch_raw_embeddings = [item.values for item in response.embeddings]
             all_raw_embeddings.extend(batch_raw_embeddings)
-
+# Bloco temporário para diagnóstico:
+            print("--- MODELOS DISPONÍVEIS NA SUA CHAVE ---")
+            for m in client.models.list():
+                print(f"Nome: {m.name} - Suporta Embedding: {'embedContent' in m.supported_generation_methods}")
+            print("---------------------------------------")
             current_progress = (i + len(batch_texts)) / total_chunks
             st.sidebar.progress(current_progress)
 
@@ -235,7 +248,7 @@ def busca_chamados_jira(user_query, max_results=3):
     jira_url = f"{CONFLUENCE_URL}/rest/api/3/search/jql" # ENDPOINT CORRIGIDO
     
     # 1. Autenticação Basic Auth em Base64
-    auth_string = f"{USER_EMAIL}:{JIRA_API_TOKEN}"
+    auth_string = f"{USER_EMAIL}:{API_JIRA}"
     encoded_auth = base64.b64encode(auth_string.encode()).decode()
     
     headers = {
@@ -404,7 +417,7 @@ def gerar_resposta_rag(user_query, vector_index, documents, client, uploaded_fil
     # 3. Geração
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash", 
+            model="gemini-1.5-flash", 
             contents=contents 
         )
         return response.text
@@ -453,7 +466,7 @@ if 'vector_index' not in st.session_state:
     with st.spinner("😵 Aguarde um momento, estou acessando minha base de conhecimento para te auxiliar nas suas questões..."):
         
         # Itera sobre CADA espaço
-        for space in SPACE_KEY:
+        for space in SPACE_KEYS:
             
             # Não exibe o st.info para o usuário final, apenas registra para debug
             log_messages.append(f"Iniciando busca no espaço: {space}") 
