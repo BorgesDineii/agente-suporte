@@ -13,17 +13,33 @@ import re # Essencial para buscar chaves JIRA como OXAP-5208
 # --- 1. CONFIGURAÇÕES E VARIÁVEIS ---
 # ATENÇÃO: É recomendado usar st.secrets ou variáveis de ambiente para estas chaves.
 # Deixei como variáveis diretas para fins de restauração, mas remova antes de fazer commit!
+<<<<<<< HEAD
+API_JIRA = "Aq_zsKNq0N-pC9W6pEAzsUJvAff5n6-Tkxx4Zqm9VLV9PaSWEW1k38hqTaXCLtm5vrUNyoBbIAm7ILksbcCuYDpPVplDRzMrZYNM0vk=BD8EB151"
+api_key = "OAhKS_GY"
+ATLASSIAN_USER = "valdinei.borges@e-deploy.com.br"
+ATLASSIAN_TOKEN = "q0N-pC9W6pEAzsUJvAff5n6-Tkxx4Zqm9VLV9PaSWEW1k38hqTaXCLtm5vrUNyoBbIAm7ILksbcCuYDpPVplDRzMrZYNM0vk=BD8EB151"
+CONFLUENCE_URL = "https://edeploy.atlassian.net"
+=======
 API_JIRA = "CCCD-CDCDCD=BD8EB151"
 api_key = "AIzaSyAuqvAA-m7BfEekEjf8NDyo9q8OAhKS_GY"
 ATLASSIAN_USER = "valdinei.borges@e-deploy.com.br"
 ATLASSIAN_TOKEN = "DCDCDCD-=BD8EB151"
 CONFLUENCE_URL = "https://edeploy.atlassian.net"
+>>>>>>> 3db5ddc1f034589ca7028a96ef568b745c20bdb4
 
+<<<<<<< HEAD
 CONFLUENCE_URL = "https://edeploy.atlassian.net"
 USER_EMAIL = "valdinei.borges@e-deploy.com.br"
-API_TOKEN = "DCDCDCD=BD8EB151"
+API_TOKEN = "vvk=BD8EB151"
+SPACE_KEY = "SPOS2"
+
+=======
+CONFLUENCE_URL = "https://edeploy.atlassian.net"
+USER_EMAIL = "valdinei.borges@e-deploy.com.br"
+API_TOKEN = "=BD8EB151"
 # SPACE_KEY = "SPOS2"
 
+>>>>>>> 3db5ddc1f034589ca7028a96ef568b745c20bdb4
 # --- 1. CONFIGURAÇÕES E VARIÁVEIS (Atualizado) ---
 # ... (seus imports e outras variáveis)
 
