@@ -15,6 +15,8 @@ import re # Essencial para buscar chaves JIRA como OXAP-5208
 # Deixei como variáveis diretas para fins de restauração, mas remova antes de fazer commit!
 
 
+
+# SPACE_KEY = "SPOS2"
 # --- 1. CONFIGURAÇÕES E VARIÁVEIS (Atualizado) ---
 # ... (seus imports e outras variáveis)
 
@@ -310,6 +312,7 @@ def gerar_resposta_rag(user_query, vector_index, documents, client, uploaded_fil
     """
     Busca o contexto relevante no índice FAISS e usa o Gemini para gerar uma resposta.
     """
+    
     
     # 1. Recuperação (Retrieval)
     jira_context = "" 
