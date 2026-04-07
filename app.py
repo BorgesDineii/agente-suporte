@@ -13,26 +13,7 @@ import re # Essencial para buscar chaves JIRA como OXAP-5208
 # --- 1. CONFIGURAÇÕES E VARIÁVEIS ---
 # ATENÇÃO: É recomendado usar st.secrets ou variáveis de ambiente para estas chaves.
 # Deixei como variáveis diretas para fins de restauração, mas remova antes de fazer commit!
-API_JIRA = "Aq_zsKNq0N-pC9W6pEAzsUJvAff5n6-Tkxx4Zqm9VLV9PaSWEW1k38hqTaXCLtm5vrUNyoBbIAm7ILksbcCuYDpPVplDRzMrZYNM0vk=BD8EB151"
-api_key = "OAhKS_GY"
-ATLASSIAN_USER = "valdinei.borges@e-deploy.com.br"
-ATLASSIAN_TOKEN = "q0N-pC9W6pEAzsUJvAff5n6-Tkxx4Zqm9VLV9PaSWEW1k38hqTaXCLtm5vrUNyoBbIAm7ILksbcCuYDpPVplDRzMrZYNM0vk=BD8EB151"
-CONFLUENCE_URL = "https://edeploy.atlassian.net"
-API_JIRA = "CCCD-CDCDCD=BD8EB151"
-api_key = "AIzaSyAuqvAA-m7BfEekEjf8NDyo9q8OAhKS_GY"
-ATLASSIAN_USER = "valdinei.borges@e-deploy.com.br"
-ATLASSIAN_TOKEN = "DCDCDCD-=BD8EB151"
-CONFLUENCE_URL = "https://edeploy.atlassian.net"
 
-CONFLUENCE_URL = "https://edeploy.atlassian.net"
-USER_EMAIL = "valdinei.borges@e-deploy.com.br"
-API_TOKEN = "vvk=BD8EB151"
-SPACE_KEY = "SPOS2"
-
-CONFLUENCE_URL = "https://edeploy.atlassian.net"
-USER_EMAIL = "valdinei.borges@e-deploy.com.br"
-API_TOKEN = "=BD8EB151"
-# SPACE_KEY = "SPOS2"
 
 # --- 1. CONFIGURAÇÕES E VARIÁVEIS (Atualizado) ---
 # ... (seus imports e outras variáveis)
@@ -68,13 +49,16 @@ if not all([CONFLUENCE_URL, USER_EMAIL, API_TOKEN
     st.error("ERRO: Configure as variaveis de ambiente (ATLASSIAN_USER, ATLASSIAN_TOKEN e CONFLUENCE_URL).")
     st.stop()
 
-# Inicialização do cliente Gemini
+# Inicialização do cliente Gemini (Removendo o v1beta que está causando conflito com o embedding)
 try:
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(
+        api_key=api_key, 
+        http_options={'api_version': 'v1'} # Mudamos de v1beta para v1
+    )
+    print("--- CLIENTE GEMINI INICIALIZADO NA V1 ---")
 except Exception as e:
     st.error(f"Erro ao iniciar o cliente Google GenAI: {e}")
     st.stop()
-
 
 # --- 2. FUNÇÕES DE INGESTÃO E LIMPEZA DE DADOS ---
 
@@ -102,71 +86,66 @@ def limpando_html_content(html_content):
 
 def busca_conteudo_confluence(space_key):
     """
-    Busca todas as páginas de um Space Key, extrai o conteúdo limpo e implementa a paginação.
+    Versão Direta: Busca conteúdo acessando o container do espaço.
+    Ideal para resolver erros 404 em instâncias específicas.
     """
     auth_credentials = (USER_EMAIL.strip(), API_TOKEN.strip()) 
     headers = {"Accept": "application/json"}
     
-    # Parâmetros de busca
-    MAX_LIMIT = 500 # Limite máximo que queremos baixar (o servidor pode impor um limite menor por requisição, como 25)
-    START_PAGINATION = 0
     clean_knowledge_base = []
     
-    # st.info(f"Iniciando busca no espaço {space_key}...")
+    # 1. Limpeza da URL Base: Remove barras extras no final se existirem
+    base_url = CONFLUENCE_URL.rstrip('/')
+    
+    # 2. Endpoint Específico de Páginas por Espaço (Mais estável que o /search)
+    # Tentaremos o caminho padrão da Cloud: /wiki/rest/api/space/{key}/content/page
+    url = f"{base_url}/wiki/rest/api/space/{space_key}/content/page?expand=body.storage&limit=50"
 
-    while True:
-        # A API v1 geralmente usa 'start' e 'limit'
-        url = (
-            f"{CONFLUENCE_URL}/wiki/rest/api/content?spaceKey={space_key}"
-            f"&expand=body.storage"
-            f"&limit=100" # Usamos um limite seguro por requisição (100)
-            f"&start={START_PAGINATION}"
-        )
+    try:
+        # LOG de depuração: Isso vai aparecer no seu terminal onde o Streamlit está rodando
+        print(f"Tentando acessar: {url}")
+        
+        response = requests.get(url, headers=headers, auth=auth_credentials)
 
-        try:
-            response = requests.get(url, headers=headers, auth=auth_credentials) 
-            response.raise_for_status()
+        # 3. TRATAMENTO DE ERRO 404 (O "Pulo do Gato")
+        # Se der 404 com '/wiki', tentamos SEM o '/wiki' (algumas APIs respondem direto na raiz)
+        if response.status_code == 404:
+            print("404 detectado com /wiki. Tentando sem o prefixo...")
+            url_fallback = f"{base_url}/rest/api/space/{space_key}/content/page?expand=body.storage&limit=50"
+            response = requests.get(url_fallback, headers=headers, auth=auth_credentials)
 
-            data = response.json()
-            
-            # 1. Processa os resultados desta página/lote
-            results = data.get('results', [])
-            
-            for page in results:
-                title = page.get('title')
-                html_content = page.get('body', {}).get('storage', {}).get('value', '')
+        response.raise_for_status()
+        data = response.json()
+        
+        # No endpoint de space content, os resultados vêm dentro de 'page' -> 'results'
+        # ou direto em 'results' dependendo da versão
+        results = data.get('page', {}).get('results', []) if 'page' in data else data.get('results', [])
+        
+        if not results:
+            print(f"Aviso: Nenhuma página encontrada no espaço {space_key}.")
+            return []
 
-                if html_content:
-                    # Chamar limpando_html_content
-                    clean_text = limpando_html_content(html_content) 
-                    clean_knowledge_base.append({
-                        "title": title,
-                        "text": clean_text
-                    })
+        for page in results:
+            title = page.get('title')
+            html_content = page.get('body', {}).get('storage', {}).get('value', '')
 
-            # 2. Verifica a Paginação
-            size_of_results = len(results)
-            total_size = len(clean_knowledge_base)
-            
-            # st.info(f"Espaço {space_key}: Páginas encontradas neste lote: {size_of_results}. Total: {total_size}")
+            if html_content:
+                clean_text = limpando_html_content(html_content) 
+                clean_knowledge_base.append({
+                    "title": title,
+                    "text": clean_text
+                })
 
-            # Se a quantidade de resultados for menor que o limite, ou se já atingimos o total desejado, paramos.
-            # Também usamos 'start' + 'size' == 'total' (propriedade que a API geralmente retorna)
-            if size_of_results < 100 or total_size >= MAX_LIMIT:
-                break
+        print(f"Sucesso! {len(clean_knowledge_base)} páginas carregadas do espaço {space_key}.")
+        return clean_knowledge_base
 
-            # Prepara para o próximo lote
-            START_PAGINATION += size_of_results
-            
-        except requests.exceptions.HTTPError as e:
-            st.error(f"❌ Erro HTTP ao conectar ao Confluence no espaço {space_key}: {e}")
-            return None
-        except Exception as e:
-            st.error(f"❌ Erro desconhecido durante a busca no espaço {space_key}: {e}")
-            return None
-            
-    # st.success(f"✅ Conexão bem-sucedida ao Confluence. Espaço {space_key} carregado.")
-    return clean_knowledge_base
+    except requests.exceptions.HTTPError as e:
+        st.error(f"❌ Erro de conexão (Status {e.response.status_code}) ao acessar o espaço: {space_key}")
+        print(f"Erro detalhado: {e}")
+        return None
+    except Exception as e:
+        st.error(f"❌ Erro inesperado: {e}")
+        return None
         
 def create_vector_store(knowledge_base, client):
     """
@@ -210,7 +189,7 @@ def create_vector_store(knowledge_base, client):
 
 
             response = client.models.embed_content(
-                model='text-embedding-004', 
+                model='models/embedding-001', # O modelo '001' é universal e evita o erro 404
                 contents=batch_texts 
             )
 
@@ -353,7 +332,7 @@ def gerar_resposta_rag(user_query, vector_index, documents, client, uploaded_fil
 
     # Cria o embedding da pergunta do usuário
     query_embedding_response = client.models.embed_content(
-        model='text-embedding-004',
+        model='models/embedding-001', # Deve ser o mesmo modelo usado na criação do índice
         contents=[user_query]
     )
 
